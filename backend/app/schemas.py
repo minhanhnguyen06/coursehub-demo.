@@ -10,3 +10,12 @@ class EnrollmentCreate(BaseModel):
         max_length=20,
         examples=["WEB-01"],
 )
+    
+from pydantic import BaseModel, Field
+
+class CapacityUpdate(BaseModel):
+    capacity: int = Field(
+        gt=0, 
+        description="Suc chua phai la so nguyen lon hon 0",
+        examples=[4]
+    )
