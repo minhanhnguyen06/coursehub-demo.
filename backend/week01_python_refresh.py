@@ -79,4 +79,3 @@ print("TH2 (Dang ky trung):", enroll_student("22000002", "INT2204"))
 print("TH3 (SV khong ton tai):", enroll_student("99999999", "INT2204"))
 print("TH4 (Lop da day):", enroll_student("22000001", "INT2205"))
 print("TH5 (Hoc phan khong ton tai):", enroll_student("22000001", "INT9999"))
-   
