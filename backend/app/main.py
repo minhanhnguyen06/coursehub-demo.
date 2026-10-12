@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, Query, Response, status
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from .database import engine
-from .schemas import EnrollmentCreate
+from .schemas import EnrollmentCreate, CapacityUpdate  
 logger = logging.getLogger(__name__)
 app = FastAPI(
     title="CourseHub API",
@@ -234,7 +234,7 @@ def get_section_detail(section_id: str) -> dict[str, object]:
             cs.id AS class_section_id,
             c.code AS course_code,
             c.name AS course_name,
-            cs.semester_id,
+            cs.semester_code,
             l.name AS lecturer_name,
             v.capacity,
             v.enrolled,
@@ -257,14 +257,13 @@ def get_section_detail(section_id: str) -> dict[str, object]:
             detail="Khong tim thay lop hoc phan",
         )
     return dict(row)
-from .schemas import EnrollmentCreate, CapacityUpdate  
+ 
 
 @app.patch("/sections/{section_id}/capacity")
 def update_section_capacity(
     section_id: str, 
     payload: CapacityUpdate
 ) -> dict[str, object]:
-
     check_sql = """
         SELECT capacity, enrolled 
         FROM v_section_summary 
@@ -288,13 +287,11 @@ def update_section_capacity(
                 detail="Khong tim thay lop hoc phan",
             )
         
-
         if payload.capacity < section["enrolled"]:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Suc chua moi ({payload.capacity}) khong duoc nho hon so sinh vien da dang ky ({section['enrolled']})",
             )
-        
         
         connection.execute(
             text(update_sql),
@@ -333,7 +330,6 @@ def list_courses(
         """
         parameters["keyword"] = f"%{keyword}%"
 
- 
     sql += " ORDER BY code OFFSET :skip LIMIT :limit;"
 
     with engine.connect() as connection:
