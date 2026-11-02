@@ -378,3 +378,72 @@ def list_courses(
         rows = connection.execute(text(sql), parameters).mappings().all()
 
     return [dict(row) for row in rows]
+@app.get("/enrollment-events")
+def get_enrollment_events(
+    student_id: str | None = None,
+    event_type: str | None = None,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> list[dict[str, object]]:
+    conditions = []
+    parameters: dict[str, object] = {"skip": skip, "limit": limit}
+
+    if student_id:
+        conditions.append("student_id = :student_id")
+        parameters["student_id"] = student_id
+
+    if event_type:
+        conditions.append("event_type = :event_type")
+        parameters["event_type"] = event_type
+
+    where_clause = ""
+    if conditions:
+        where_clause = "WHERE " + " AND ".join(conditions)
+
+    sql = f"""
+        SELECT id, student_id, class_section_id, event_type, source, dataset, occurred_at
+        FROM enrollment_events
+        {where_clause}
+        ORDER BY occurred_at DESC, id DESC
+        OFFSET :skip LIMIT :limit
+    """
+
+    with engine.begin() as connection:
+        rows = connection.execute(text(sql), parameters).mappings().all()
+
+    return [dict(row) for row in rows]
+
+@app.post("/demo/test-rollback-fail")
+def test_rollback_fail(payload: EnrollmentCreate) -> dict[str, str]:
+    insert_enrollment_sql = """
+        INSERT INTO enrollments (student_id, class_section_id)
+        VALUES (:student_id, :class_section_id)
+    """
+    # Cố tình truyền sai event_type ('INVALID_TYPE') vi phạm ràng buộc CHECK hoặc gây lỗi CSDL
+    insert_invalid_event_sql = """
+        INSERT INTO enrollment_events
+            (student_id, class_section_id, event_type, source, dataset)
+        VALUES
+            (:student_id, :class_section_id, 'INVALID_TYPE_CAUSE_ERROR_FOR_ROLLBACK', 'api', 'demo')
+    """
+    parameters = {
+        "student_id": payload.student_id,
+        "class_section_id": payload.class_section_id,
+    }
+
+    try:
+        with engine.begin() as connection:
+            # 1. Thao tác 1: Thêm vào enrollments (Sẽ chạy thành công trước)
+            connection.execute(text(insert_enrollment_sql), parameters)
+            
+            # 2. Thao tác 2: Cố tình gây lỗi khi thêm vào enrollment_events
+            # Lệnh này bị lỗi -> engine.begin() tự động TRIGGER ROLLBACK toàn bộ block
+            connection.execute(text(insert_invalid_event_sql), parameters)
+            
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Transaction bi Rollback do loi: {str(exc)}",
+        ) from exc
+
+    return {"message": "Neu thay dong nay la Transaction CHUA bi rollback!"}
